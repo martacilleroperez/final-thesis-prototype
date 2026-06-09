@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Parallax</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    html, body {
+      width:100%; height:100%;
+      overflow:hidden;
+      background:#000;
+      user-select:none;
+      font-family:'Georgia', serif;
+    }
+
+    /* ══ WORLD ══ */
+    #world {
+      position: fixed;
+      top: 0; left: 0;
+      width: 200vw;
+      height: 100vh;
+      will-change: transform;
+    }
+
+    /* ══ SCENES ══ */
+    .scene {
+      position: absolute;
+      top: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #scene-1 { left: 0; }
+    #scene-2 { left: 100vw; }
+
+    /* ══ PARALLAX LAYERS ══ */
+    .layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center center;
+    will-change: background-position;
+    pointer-events: none;
+    }
+
+    /* Scene 1 — img_2 */
+    #s1-bg      { background-image: url('/images/img_2/final_nackfround.png');   z-index:1; }
+    #s1-mid     { background-image: url('/images/img_2/final_middle.png');       z-index:2; }
+    #s1-freedom { background-image: url('/images/img_2/freedom_foregorund.png'); z-index:3; pointer-events:all; cursor:pointer; }
+    #s1-fg      { background-image: url('/images/img_2/final_foreground.png');   z-index:4; }
+
+    /* Scene 2 — img 4 (space encoded as %20) */
+    #s2-bg      { background-image: url('/images/img%204/background.png');        z-index:1; }
+    #s2-mid-g   { background-image: url('/images/img%204/middle_ground.png');     z-index:2; }
+    #s2-ctrl    { background-image: url('/images/img%204/control_middle.png');    z-index:3; }
+    #s2-freedom { background-image: url('/images/img%204/freedom_middle.png');    z-index:4; pointer-events:all; cursor:pointer; }
+    #s2-fg      { background-image: url('/images/img%204/foreground_mask.png');   z-index:5; }
+
+    /* Glow kept subtle — only on hover, not always-on */
+    #s1-freedom, #s2-freedom {
+      transition: filter 0.28s ease;
+    }
+    #s1-freedom:hover, #s2-freedom:hover {
+      filter: brightness(1.14) drop-shadow(0 0 20px rgba(255,220,100,0.3));
+    }
+
+    /* Pulse animation — scale up for 1s every 3s */
+    @keyframes freedom-pulse {
+      0%   { transform: scale(1); }
+      85%  { transform: scale(1); }       /* stay normal for ~2.5s */
+      90%  { transform: scale(1.055); }   /* grow */
+      95%  { transform: scale(1.055); }   /* hold at peak */
+      100% { transform: scale(1); }       /* shrink back */
+    }
+
+    /* Applied via JS class so it stacks with the parallax translateX */
+    .freedom-pulse {
+      animation: freedom-pulse 3s ease-in-out infinite;
+      transform-origin: center center;
+    }
+
+    /* ══ SCENE TRANSITION ZONE (invisible strip at boundary) ══ */
+    #transition-zone {
+      position: absolute;
+      /* sits straddling the seam between scene 1 and 2 */
+      left: calc(100vw - 60px);
+      top: 0;
+      width: 120px;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ══ INSTRUCTION SCREEN ══ */
+    #instructions {
+      position: fixed; inset: 0;
+      background: rgba(8, 6, 4, 0.93);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 500;
+      opacity: 1;
+      transition: opacity 0.6s ease;
+    }
+    #instructions.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .instr-box {
+      max-width: min(560px, 88vw);
+      width: 100%;
+      text-align: center;
+      padding: 3.2rem 3.6rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(20,16,12,0.95);
+      border-radius: 8px;
+      box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+    }
+
+    .instr-box .eyebrow {
+      font-size: .68rem;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: rgba(255,200,80,0.7);
+      margin-bottom: 1.2rem;
+    }
+
+    .instr-box h1 {
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      font-weight: normal;
+      color: #f5efe0;
+      margin-bottom: 1rem;
+      letter-spacing: .03em;
+    }
+
+    .instr-box p {
+      color: rgba(255,255,255,0.5);
+      font-size: clamp(.82rem, 1.4vw, .94rem);
+      line-height: 1.75;
+      margin-bottom: 2.4rem;
+    }
+
+    .instr-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .8rem 2rem;
+      margin-bottom: 2.4rem;
+      text-align: left;
+    }
+
+    .instr-item {
+      display: flex;
+      align-items: flex-start;
+      gap: .7rem;
+    }
+
+    .instr-item .key {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 5px;
+      padding: .18rem .55rem;
+      font-size: .78rem;
+      color: rgba(255,220,100,0.9);
+      white-space: nowrap;
+      flex-shrink: 0;
+      font-family: monospace;
+      letter-spacing: .04em;
+    }
+
+    .instr-item span {
+      font-size: .82rem;
+      color: rgba(255,255,255,0.5);
+      line-height: 1.5;
+      padding-top: .1rem;
+    }
+
+    .instr-start {
+      background: #f5efe0;
+      color: #1a1a1a;
+      border: none;
+      padding: .8rem 2.8rem;
+      border-radius: 40px;
+      font-size: .9rem;
+      font-family: 'Georgia', serif;
+      letter-spacing: .06em;
+      cursor: pointer;
+      transition: background .2s, transform .15s;
+    }
+    .instr-start:hover { background: #fff; transform: translateY(-2px); }
+
+    /* ══ POPUP ══ */
+    #overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 300;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.32s ease;
+    }
+    #overlay.show { opacity:1; pointer-events:all; }
+
+    .popup {
+      background: #fdf6e3;
+      border-radius: 6px;
+      padding: 3rem 3.4rem;
+      max-width: min(520px, 88vw);
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 40px 100px rgba(0,0,0,0.65),
+                  inset 0 0 0 1.5px rgba(0,0,0,0.08);
+      transform: scale(0.93) translateY(28px);
+      transition: transform 0.34s cubic-bezier(.22,1,.36,1);
+    }
+    #overlay.show .popup { transform: scale(1) translateY(0); }
+
+    .popup__icon  { font-size:2.6rem; display:block; margin-bottom:.4rem; }
+    .popup__tag   { font-size:.68rem; letter-spacing:.18em; text-transform:uppercase; color:#aaa; margin-bottom:.5rem; }
+    .popup h2     { font-size:clamp(1.1rem,2.4vw,1.65rem); color:#1a1a1a; font-weight:normal; margin-bottom:.8rem; letter-spacing:.02em; }
+    .popup p      { color:#555; font-size:clamp(.85rem,1.5vw,.98rem); line-height:1.8; margin-bottom:2rem; }
+    .popup__close {
+      background:#1a1a1a; color:#fdf6e3;
+      border:none; padding:.7rem 2.4rem;
+      border-radius:40px; font-size:.88rem;
+      letter-spacing:.06em; cursor:pointer;
+      transition: background .2s, transform .15s;
+    }
+    .popup__close:hover { background:#444; transform:translateY(-1px); }
+
+    /* ══ SCENE DOTS ══ */
+    #scene-dots {
+      position: fixed; bottom: 1.6rem; right: 2rem;
+      display: flex; gap: .6rem; align-items: center;
+      z-index: 50; pointer-events: none;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,.25);
+      transition: background .35s, transform .35s;
+    }
+    .dot.active { background: rgba(255,255,255,.9); transform: scale(1.35); }
+
+    /* ══ WASD HINT (fades in after instructions close) ══ */
+    #ctrl-hint {
+      position: fixed; bottom: 1.6rem; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.45);
+      color: rgba(255,255,255,.65);
+      padding: .4rem 1.1rem; border-radius: 40px;
+      font-size: .75rem; letter-spacing: .05em;
+      pointer-events: none;
+      opacity: 0; transition: opacity 1s ease;
+      z-index: 50;
+    }
+    #ctrl-hint.show { opacity: 1; }
+    #ctrl-hint.gone { opacity: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ════ INSTRUCTION SCREEN ════ -->
+<div id="instructions">
+  <div class="instr-box">
+    <div class="eyebrow">How to navigate</div>
+    <h1>Explore the World</h1>
+    <p>
+      Two scenes await you. Move through them using your keyboard,
+      trackpad, or mouse. Glowing figures can be clicked for more.
+      A moment of reflection awaits at the threshold between worlds.
+    </p>
+    <div class="instr-grid">
+      <div class="instr-item">
+        <div class="key">A &nbsp;/&nbsp; ←</div>
+        <span>Move left</span>
+      </div>
+      <div class="instr-item">
+        <div class="key">D &nbsp;/&nbsp; →</div>
+        <span>Move right</span>
+      </div>
+      <div class="instr-item">
+        <div class="key">Trackpad</div>
+        <span>Two-finger swipe horizontally</span>
+      </div>
+      <div class="instr-item">
+        <div class="key">Click + drag</div>
+        <span>Drag the scene with your mouse</span>
+      </div>
+      <div class="instr-item">
+        <div class="key">✦ Glow</div>
+        <span>Click glowing figures to learn more</span>
+      </div>
+      <div class="instr-item">
+        <div class="key">Esc</div>
+        <span>Close any popup</span>
+      </div>
+    </div>
+    <button class="instr-start" id="instr-start">Begin &rarr;</button>
+  </div>
+</div>
+
+<!-- ════ WORLD ════ -->
+<div id="world">
+
+  <!-- SCENE 1 — img_2 -->
+  <div class="scene" id="scene-1">
+    <div class="layer" id="s1-bg"></div>
+    <div class="layer" id="s1-mid"></div>
+    <!-- wrapper moves with parallax; inner div pulses independently -->
+    <div class="layer" id="s1-freedom-wrap">
+      <div class="layer freedom-pulse" id="s1-freedom"
+           role="button" tabindex="0"
+           aria-label="Freedom characters — click to read more"></div>
+    </div>
+    <div class="layer" id="s1-fg"></div>
+  </div>
+
+  <!-- SCENE 2 — img_4 -->
+  <div class="scene" id="scene-2">
+    <div class="layer" id="s2-bg"></div>
+    <div class="layer" id="s2-mid-g"></div>
+    <div class="layer" id="s2-ctrl"></div>
+    <!-- wrapper moves with parallax; inner div pulses independently -->
+    <div class="layer" id="s2-freedom-wrap">
+      <div class="layer freedom-pulse" id="s2-freedom"
+           role="button" tabindex="0"
+           aria-label="Freedom characters — click to read more"></div>
+    </div>
+    <div class="layer" id="s2-fg"></div>
+  </div>
+
+  <!-- Scene transition trigger zone (at seam between scene 1 & 2) -->
+  <div id="transition-zone" data-st="transition"></div>
+
+</div>
+
+<!-- ════ POPUP ════ -->
+<div id="overlay">
+  <div class="popup">
+    <span class="popup__icon" id="popup-icon"></span>
+    <div  class="popup__tag"  id="popup-tag"></div>
+    <h2 id="popup-title"></h2>
+    <p  id="popup-body"></p>
+    <button class="popup__close" id="popup-close">Continue</button>
+  </div>
+</div>
+
+<!-- ════ UI ════ -->
+<div id="scene-dots">
+  <div class="dot active" data-scene="1"></div>
+  <div class="dot"        data-scene="2"></div>
+</div>
+<div id="ctrl-hint">A / D &nbsp;·&nbsp; ← → &nbsp;·&nbsp; Trackpad swipe</div>
+
+<script>
+/* ══════════════════════════════════════════
+   POPUP CONTENT — edit freely
+   ══════════════════════════════════════════ */
+
+// Fires once when crossing from scene 1 → scene 2
+const TRANSITION_POPUP = {
+  icon:  '✦',
+  tag:   'Between Worlds',
+  title: 'The Threshold',
+  body:  'Placeholder — replace with your text for the moment between the two scenes.'
+};
+
+// Freedom character popups (scene 1 and scene 2 can have different text)
+const FREEDOM_POPUP_S1 = {
+  icon:  '🕊️',
+  tag:   'Scene I · Freedom',
+  title: 'The Freedom Figures',
+  body:  'Placeholder — replace with your description for the freedom characters in Scene 1.'
+};
+
+const FREEDOM_POPUP_S2 = {
+  icon:  '🕊️',
+  tag:   'Scene II · Freedom',
+  title: 'The Freedom Figures',
+  body:  'Placeholder — replace with your description for the freedom characters in Scene 2.'
+};
+
+/* ══════════════════════════════════════════
+   PARALLAX SPEEDS (X only — vertical locked)
+   ══════════════════════════════════════════ */
+const SPEED = {
+  's1-bg':      -0.30,
+  's1-mid':     -0.18,
+  's1-freedom': -0.08,
+  's1-fg':       0.04,
+
+  's2-bg':      -0.30,
+  's2-mid-g':   -0.20,
+  's2-ctrl':    -0.12,
+  's2-freedom': -0.06,
+  's2-fg':       0.04,
+};
+/* ══════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════ */
+let posX = 0;
+let velX = 0;
+let isDragging = false;
+let startX = 0, lastX = 0;
+let rafId = null;
+let transitionFired = false;
+let started = false;
+
+const FRICTION     = 0.88;
+const KEY_SPEED    = 14;       // px per frame for WASD/arrow keys
+const PAD          = 40;
+const keys         = {};       // held keys
+
+function maxPanX() { return window.innerWidth; }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+/* ══════════════════════════════════════════
+   RENDER
+   ══════════════════════════════════════════ */
+function render() {
+  const world = document.getElementById('world');
+
+  // Move only the whole world from scene 1 to scene 2
+  world.style.transform = `translateX(${posX}px)`;
+
+  // Parallax happens inside each layer using background-position
+  // The elements themselves never leave their scene, so no leaking
+  Object.entries(SPEED).forEach(([id, spd]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const offset = posX * spd;
+    el.style.backgroundPosition = `calc(50% + ${offset}px) center`;
+  });
+
+  const progress = -posX / maxPanX();
+
+  document.querySelectorAll('.dot').forEach(d => {
+    const s = parseInt(d.dataset.scene);
+    d.classList.toggle('active', s === (progress < 0.5 ? 1 : 2));
+  });
+
+  checkTransition();
+}
+
+/* ══════════════════════════════════════════
+   TRANSITION POPUP — fires at scene boundary
+   ══════════════════════════════════════════ */
+function checkTransition() {
+  if (transitionFired) return;
+  // seam is at world x = -windowWidth; trigger within ±15% of it
+  const seamX   = -maxPanX();
+  const zone    = maxPanX() * 0.15;
+  if (Math.abs(posX - seamX) < zone) {
+    transitionFired = true;
+    showPopup(TRANSITION_POPUP);
+  }
+}
+
+/* ══════════════════════════════════════════
+   KEYBOARD — WASD + Arrow keys
+   ══════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === 'Escape') closePopup();
+  // prevent page scroll on arrows
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup',   e => { keys[e.key] = false; });
+
+function keyboardStep() {
+  if (!started) return;
+  let dx = 0;
+  if (keys['a'] || keys['A'] || keys['ArrowLeft'])  dx = +KEY_SPEED;
+  if (keys['d'] || keys['D'] || keys['ArrowRight']) dx = -KEY_SPEED;
+  if (dx !== 0) {
+    velX = dx;
+    posX = clamp(posX + dx, -maxPanX() - PAD, PAD);
+    render();
+  }
+  requestAnimationFrame(keyboardStep);
+}
+
+/* ══════════════════════════════════════════
+   TRACKPAD / WHEEL (horizontal scroll)
+   ══════════════════════════════════════════ */
+document.addEventListener('wheel', e => {
+  if (!started) return;
+  e.preventDefault();
+  // Use deltaX for trackpad horizontal swipe; fall back to deltaY
+  const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  posX = clamp(posX - delta, -maxPanX() - PAD, PAD);
+  velX = -delta * 0.3;
+  render();
+  cancelAnimationFrame(rafId);
+  momentum();
+}, { passive: false });
+
+/* ══════════════════════════════════════════
+   MOUSE DRAG
+   ══════════════════════════════════════════ */
+document.addEventListener('pointerdown', e => {
+  if (!started) return;
+  if (e.target.closest('[role="button"]')) return;
+  isDragging = true;
+  document.body.style.cursor = 'grabbing';
+  startX = e.clientX - posX;
+  lastX  = e.clientX;
+  velX   = 0;
+  cancelAnimationFrame(rafId);
+});
+
+document.addEventListener('pointermove', e => {
+  if (!isDragging) return;
+  posX = clamp(e.clientX - startX, -maxPanX() - PAD, PAD);
+  velX = e.clientX - lastX;
+  lastX = e.clientX;
+  render();
+});
+
+document.addEventListener('pointerup', () => {
+  if (!isDragging) return;
+  isDragging = false;
+  document.body.style.cursor = '';
+  momentum();
+});
+document.addEventListener('pointercancel', () => {
+  isDragging = false;
+  document.body.style.cursor = '';
+});
+
+/* Touch swipe */
+let tx0 = 0;
+document.addEventListener('touchstart', e => {
+  if (!started) return;
+  tx0 = e.touches[0].clientX - posX;
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!started) return;
+  posX = clamp(e.touches[0].clientX - tx0, -maxPanX() - PAD, PAD);
+  render();
+}, { passive: true });
+
+/* ══════════════════════════════════════════
+   MOMENTUM
+   ══════════════════════════════════════════ */
+function momentum() {
+  rafId = requestAnimationFrame(function step() {
+    velX *= FRICTION;
+    if (Math.abs(velX) < 0.15) return;
+    posX = clamp(posX + velX, -maxPanX() - PAD, PAD);
+    render();
+    rafId = requestAnimationFrame(step);
+  });
+}
+
+/* ══════════════════════════════════════════
+   FREEDOM CLICKS
+   ══════════════════════════════════════════ */
+const s1f = document.getElementById('s1-freedom');
+const s2f = document.getElementById('s2-freedom');
+
+s1f.addEventListener('click',   e => { e.stopPropagation(); showPopup(FREEDOM_POPUP_S1); });
+s1f.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') showPopup(FREEDOM_POPUP_S1); });
+s2f.addEventListener('click',   e => { e.stopPropagation(); showPopup(FREEDOM_POPUP_S2); });
+s2f.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') showPopup(FREEDOM_POPUP_S2); });
+
+/* ══════════════════════════════════════════
+   POPUP
+   ══════════════════════════════════════════ */
+const overlay = document.getElementById('overlay');
+
+function showPopup(data) {
+  document.getElementById('popup-icon').textContent  = data.icon  || '';
+  document.getElementById('popup-tag').textContent   = data.tag   || '';
+  document.getElementById('popup-title').textContent = data.title || '';
+  document.getElementById('popup-body').textContent  = data.body  || '';
+  overlay.classList.add('show');
+}
+
+document.getElementById('popup-close').addEventListener('click', closePopup);
+overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopup(); });
+function closePopup() { overlay.classList.remove('show'); }
+
+/* ══════════════════════════════════════════
+   INSTRUCTION SCREEN
+   ══════════════════════════════════════════ */
+document.getElementById('instr-start').addEventListener('click', () => {
+  const instr = document.getElementById('instructions');
+  instr.classList.add('hide');
+  // after transition remove from flow
+  setTimeout(() => { instr.style.display = 'none'; }, 700);
+
+  // show control hint briefly
+  const hint = document.getElementById('ctrl-hint');
+  hint.classList.add('show');
+  setTimeout(() => hint.classList.add('gone'), 4000);
+
+  started = true;
+  keyboardStep();
+});
+
+/* ══════════════════════════════════════════
+   INIT
+   ══════════════════════════════════════════ */
+render();
+</script>
+</body>
+</html>

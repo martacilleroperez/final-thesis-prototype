@@ -1,0 +1,103 @@
+/* =============================================
+   RESET & BASE
+   ============================================= */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* =============================================
+   HERO — full-screen background image
+   Put your image in /public and set the path below
+   ============================================= */
+.hero {
+  width: 100vw;
+  height: 100vh;
+  background-image: url('/images/intro_option_2.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* =============================================
+   BUTTON CONTAINER
+   Two buttons side-by-side, centred vertically
+   ============================================= */
+.hero__content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(2rem, 8vw, 8rem);       /* gap shrinks on small screens */
+  width: 100%;
+  padding: 0 5vw;
+}
+
+/* =============================================
+   IMAGE BUTTONS
+   ============================================= */
+.img-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s ease, filter 0.25s ease;
+  /* Constrain size so buttons scale with the viewport */
+  width: clamp(140px, 25vw, 320px);
+  height: clamp(140px, 25vw, 320px);
+}
+
+.img-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;             /* prevent ghost drag on images */
+}
+
+.img-btn:hover {
+  transform: scale(1.08);
+  filter: brightness(1.15) drop-shadow(0 8px 24px rgba(0,0,0,0.4));
+}
+
+.img-btn:active {
+  transform: scale(0.97);
+}
+
+/* =============================================
+   RESPONSIVE TWEAKS
+   ============================================= */
+
+/* Tablets — stack buttons a little closer */
+@media (max-width: 768px) {
+  .hero__content {
+    gap: clamp(1.5rem, 6vw, 4rem);
+  }
+}
+
+/* Small phones — stack vertically if very narrow */
+@media (max-width: 480px) {
+  .hero__content {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .img-btn {
+    width: clamp(80px, 38vw, 150px);
+    height: clamp(80px, 38vw, 150px);
+  }
+}
